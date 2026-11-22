@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>عدّاد الورق</title>
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#131b25; --panel2:#17212c; --line:#243242;
+    --txt:#e8edf3; --muted:#7d8fa3; --teal:#2dd4bf; --gold:#fbbf24; --red:#f87171;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; }
+  body{
+    background: var(--bg); color: var(--txt);
+    font-family:"Segoe UI", Tahoma, "Noto Naskh Arabic", "Geeza Pro", system-ui, sans-serif;
+    overscroll-behavior:none; touch-action:manipulation;
+  }
+  .app{
+    max-width:520px; margin:0 auto; min-height:100dvh;
+    display:flex; flex-direction:column; gap:10px;
+    padding:12px 14px calc(12px + var(--safe-b));
+  }
+  header{ display:flex; align-items:center; gap:8px; }
+  .title{ font-size:15px; font-weight:700; letter-spacing:.2px; }
+  .spacer{ flex:1; }
+  .pill{ font-size:11.5px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:4px 10px; }
+  .icon-btn{
+    width:36px; height:36px; border-radius:11px; border:1px solid var(--line);
+    background:var(--panel); color:var(--muted); font-size:15px; font-weight:700; cursor:pointer;
+  }
+
+  .total{ text-align:center; padding:10px 0 2px; }
+  .num{
+    font-size:clamp(64px, 19vw, 92px); font-weight:800; letter-spacing:-3px; line-height:1;
+    font-variant-numeric:tabular-nums; transition:transform .12s ease, color .18s ease;
+  }
+  .num.bump{ transform:scale(1.06); color:var(--teal); }
+  .sub{ margin-top:6px; font-size:13px; color:var(--muted); }
+  .badge{
+    display:none; margin:9px auto 0; width:max-content; max-width:100%;
+    font-size:11.5px; color:var(--gold); background:rgba(251,191,36,.1);
+    border:1px solid rgba(251,191,36,.35); border-radius:999px; padding:5px 12px;
+  }
+  .badge.on{ display:block; }
+
+  .hand{
+    display:flex; flex-wrap:wrap; align-content:flex-start; gap:6px; direction:ltr;
+    flex:0 0 auto; padding:8px 2px; min-height:82px;
+  }
+  .card{
+    flex:0 0 auto; width:40px; height:58px; border-radius:8px;
+    background:#f7f8fa; color:#0f172a; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; font-weight:800; font-size:15px;
+    box-shadow:0 2px 0 #b6c0cc, 0 6px 14px rgba(0,0,0,.4);
+    user-select:none; -webkit-user-select:none; touch-action:manipulation;
+    transition:transform .08s ease, opacity .15s ease;
+  }
+  .card.red{ color:#c81e1e; }
+  .card .s{ font-size:12px; line-height:1; margin-top:2px; }
+  .card.hold{ transform:translateY(-4px) scale(.97); opacity:.75; }
+  .card.out{ transform:scale(.85); opacity:0; }
+  .empty{ margin:auto; font-size:12.5px; color:#4c5d70; }
+
+  .grow{ flex:1 1 auto; min-height:8px; display:flex; align-items:center; justify-content:center; }
+  .hint{ font-size:11.5px; color:#3e4e60; text-align:center; line-height:2; padding:0 30px; }
+  .suits{ display:flex; gap:6px; }
+  .suit{
+    flex:1; height:42px; border-radius:12px; background:var(--panel);
+    border:1px solid var(--line); color:var(--txt); font-size:18px; cursor:pointer;
+  }
+  .suit.red{ color:#ef4444; }
+  .suit.on{ border-color:var(--teal); background:rgba(45,212,191,.12); box-shadow:inset 0 0 0 1px rgba(45,212,191,.35); }
+
+  .pad{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .rank{
+    height:50px; border-radius:12px; background:var(--panel2); border:1px solid var(--line);
+    color:var(--txt); font-size:16px; font-weight:700; cursor:pointer;
+    transition:transform .07s ease, background .12s ease, border-color .12s ease;
+  }
+  .rank:active{ transform:scale(.93); background:#1d2b39; border-color:var(--teal); }
+
+  .actions{ display:flex; gap:8px; margin-top:2px; }
+  .btn{
+    flex:1; height:48px; border-radius:13px; background:transparent;
+    font-size:14px; font-weight:700; cursor:pointer;
+  }
+  .btn.undo{ border:1px solid rgba(45,212,191,.5); color:var(--teal); }
+  .btn.reset{ border:1px solid rgba(248,113,113,.45); color:var(--red); }
+  .btn[disabled]{ opacity:.35; }
+
+  .toast{
+    position:fixed; left:50%; transform:translate(-50%, 20px); bottom:calc(76px + var(--safe-b));
+    display:flex; align-items:center; gap:10px; max-width:92vw;
+    background:#16241f; border:1px solid rgba(45,212,191,.45); color:#9ff0e4;
+    font-size:12.5px; padding:9px 10px 9px 14px; border-radius:14px;
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:20;
+  }
+  .toast.on{ opacity:1; transform:translate(-50%,0); pointer-events:auto; }
+  .toast button{
+    background:rgba(45,212,191,.18); border:1px solid rgba(45,212,191,.5); color:#c8fff7;
+    font-size:12px; font-weight:700; padding:5px 10px; border-radius:9px; cursor:pointer;
+  }
+
+  .sheet{ position:fixed; inset:0; background:rgba(4,7,10,.72); display:none; z-index:30; }
+  .sheet.on{ display:flex; align-items:flex-end; justify-content:center; }
+  .sheet-body{
+    width:100%; max-width:520px; background:#101821; border-top:1px solid var(--line);
+    border-radius:20px 20px 0 0; padding:18px 18px calc(20px + var(--safe-b));
+  }
+  .sheet-body h2{ margin:0 0 10px; font-size:15px; }
+  .sheet-body ul{ margin:0; padding-inline-start:18px; color:#b9c7d6; font-size:13px; line-height:1.95; }
+  .sheet-body code{ background:#1a2431; border-radius:6px; padding:1px 6px; color:#e8edf3; }
+  @media (min-width: 640px){
+    .app{ max-width: 620px; }
+    .rank{ height: 60px; font-size: 18px; }
+    .suit{ height: 48px; font-size: 20px; }
+    .card{ width: 46px; height: 66px; font-size: 16px; }
+  }
+
+  .sheet-close{ margin-top:14px; width:100%; height:44px; border-radius:12px; border:1px solid var(--line); background:var(--panel); color:var(--txt); font-size:13.5px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">عدّاد الورق</div>
+    <div class="spacer"></div>
+    <div class="pill" id="count">0 ورقة</div>
+    <button class="icon-btn" id="help" aria-label="القواعد">؟</button>
+  </header>
+
+  <section class="total">
+    <div class="num" id="num">0</div>
+    <div class="sub" id="sub">أضف أول ورقة</div>
+    <div class="badge" id="badge">A محسوب 1 — وجود 2 و 3 (−10)</div>
+  </section>
+
+  <section class="hand" id="hand"><div class="empty">الورقات المضافة تظهر هنا</div></section>
+
+  <div class="grow"><div class="hint">J, Q, K = 10 &nbsp;·&nbsp; 2–10 = رقمها &nbsp;·&nbsp; A = 11<br>وإذا اجتمع A مع 2 و 3 → آس واحد ينزل إلى 1</div></div>
+
+  <section class="suits" id="suits">
+    <button class="suit on" data-suit="♠">♠</button>
+    <button class="suit red" data-suit="♥">♥</button>
+    <button class="suit red" data-suit="♦">♦</button>
+    <button class="suit" data-suit="♣">♣</button>
+  </section>
+
+  <section class="pad" id="pad"></section>
+
+  <section class="actions">
+    <button class="btn undo" id="undo">تراجع</button>
+    <button class="btn reset" id="reset">تصفير</button>
+  </section>
+</div>
+
+<div class="toast" id="toast"><span id="toastText"></span><button id="toastBtn" hidden>تراجع</button></div>
+
+<div class="sheet" id="sheet">
+  <div class="sheet-body">
+    <h2>قواعد العدّ</h2>
+    <ul>
+      <li><code>J, Q, K</code> = 10 لكل ورقة</li>
+      <li><code>2 – 10</code> = قيمتها الحقيقية</li>
+      <li><code>A</code> = 11</li>
+      <li>إذا اجتمع <code>A</code> مع <code>2</code> و <code>3</code> → آس واحد فقط ينزل إلى 1 (خصم 10)</li>
+      <li>باقي الآسات تبقى 11</li>
+      <li>اضغط مطوّلاً على أي ورقة لحذفها</li>
+    </ul>
+    <button class="sheet-close" id="sheetClose">تم</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  var KEY = 'card-counter.v1';
+
+  var el = {
+    num: document.getElementById('num'),
+    sub: document.getElementById('sub'),
+    badge: document.getElementById('badge'),
+    hand: document.getElementById('hand'),
+    pad: document.getElementById('pad'),
+    count: document.getElementById('count'),
+    undo: document.getElementById('undo'),
+    reset: document.getElementById('reset'),
+    toast: document.getElementById('toast'),
+    toastText: document.getElementById('toastText'),
+    toastBtn: document.getElementById('toastBtn')
+  };
+
+  var state = { cards: [], suit: '♠', resetArmed: false };
+  var pendingDelete = null;
+
+  function load(){
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var p = JSON.parse(raw);
+        if (p && Array.isArray(p.cards)) {
+          state.cards = p.cards.filter(function(c){ return c && RANKS.indexOf(c.rank) !== -1; });
+          if (p.suit) state.suit = p.suit;
+        }
+      }
+    } catch(e){}
+  }
+  function save(){
+    try { localStorage.setItem(KEY, JSON.stringify({ cards: state.cards, suit: state.suit })); } catch(e){}
+  }
+
+  function baseValue(rank){
+    if (rank === 'A') return 11;
+    if (rank === 'J' || rank === 'Q' || rank === 'K') return 10;
+    return parseInt(rank, 10);
+  }
+
+  function compute(){
+    var raw = 0, hasA = false, has2 = false, has3 = false;
+    for (var i = 0; i < state.cards.length; i++){
+      var r = state.cards[i].rank;
+      raw += baseValue(r);
+      if (r === 'A') hasA = true;
+      if (r === '2') has2 = true;
+      if (r === '3') has3 = true;
+    }
+    var adj = (hasA && has2 && has3) ? 10 : 0;
+    return { raw: raw, adj: adj, total: raw - adj, n: state.cards.length };
+  }
+
+  function buzz(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
+
+  function render(bump){
+    var s = compute();
+    el.num.textContent = s.total;
+    if (bump){
+      el.num.classList.add('bump');
+      setTimeout(function(){ el.num.classList.remove('bump'); }, 140);
+    }
+    el.count.textContent = s.n + ' ورقة';
+    el.sub.textContent = s.n === 0
+      ? 'أضف أول ورقة'
+      : (s.adj ? 'قبل التعديل: ' + s.raw : '');
+    el.badge.classList.toggle('on', s.adj > 0);
+    el.undo.disabled = s.n === 0;
+    drawHand();
+    save();
+  }
+
+  function drawHand(){
+    el.hand.innerHTML = '';
+    if (!state.cards.length){
+      var e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'الورقات المضافة تظهر هنا';
+      el.hand.appendChild(e);
+      return;
+    }
+    state.cards.forEach(function(c, idx){
+      var d = document.createElement('div');
+      d.className = 'card' + (c.suit === '♥' || c.suit === '♦' ? ' red' : '');
+      d.dataset.idx = idx;
+      d.innerHTML = '<div>' + c.rank + '</div><div class="s">' + c.suit + '</div>';
+      attachHold(d, idx);
+      el.hand.appendChild(d);
+    });
+  }
+
+  function attachHold(node, idx){
+    var t = null, fired = false;
+    function start(ev){
+      fired = false;
+      node.classList.add('hold');
+      t = setTimeout(function(){
+        fired = true;
+        node.classList.remove('hold');
+        removeCard(idx);
+      }, 550);
+    }
+    function cancel(){
+      clearTimeout(t);
+      node.classList.remove('hold');
+    }
+    node.addEventListener('pointerdown', start);
+    node.addEventListener('pointerup', cancel);
+    node.addEventListener('pointercancel', cancel);
+    node.addEventListener('pointerleave', cancel);
+    node.addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
+  }
+
+  function removeCard(idx){
+    if (idx < 0 || idx >= state.cards.length) return;
+    var c = state.cards[idx];
+    var node = el.hand.querySelector('[data-idx="' + idx + '"]');
+    pendingDelete = { card: c, idx: idx };
+    if (node) node.classList.add('out');
+    buzz(15);
+    setTimeout(function(){
+      state.cards.splice(idx, 1);
+      render(false);
+      showToast('حُذفت ' + c.rank + c.suit);
+    }, 120);
+  }
+
+  var toastTimer = null;
+  function showToast(msg, undoable){
+    el.toastText.textContent = msg;
+    el.toastBtn.hidden = !undoable;
+    el.toast.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      el.toast.classList.remove('on');
+      pendingDelete = null;
+    }, undoable ? 5000 : 2000);
+  }
+
+  el.toastBtn.addEventListener('click', function(){
+    if (!pendingDelete) return;
+    state.cards.splice(pendingDelete.idx, 0, pendingDelete.card);
+    pendingDelete = null;
+    el.toast.classList.remove('on');
+    render(true);
+    buzz(10);
+  });
+
+  RANKS.forEach(function(r){
+    var b = document.createElement('button');
+    b.className = 'rank';
+    b.textContent = r;
+    b.addEventListener('click', function(){
+      state.cards.push({ rank: r, suit: state.suit });
+      buzz(10);
+      render(true);
+    });
+    el.pad.appendChild(b);
+  });
+
+  document.getElementById('suits').addEventListener('click', function(ev){
+    var b = ev.target.closest('.suit');
+    if (!b) return;
+    state.suit = b.dataset.suit;
+    Array.prototype.forEach.call(this.children, function(c){ c.classList.toggle('on', c === b); });
+    save();
+    buzz(8);
+  });
+
+  el.undo.addEventListener('click', function(){
+    if (!state.cards.length) return;
+    var c = state.cards.pop();
+    render(false);
+    showToast('تراجع عن ' + c.rank + c.suit);
+    buzz(10);
+  });
+
+  var resetTimer = null;
+  el.reset.addEventListener('click', function(){
+    if (!state.cards.length) return;
+    if (!state.resetArmed){
+      state.resetArmed = true;
+      el.reset.textContent = 'تأكيد التصفير؟';
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(function(){
+        state.resetArmed = false;
+        el.reset.textContent = 'تصفير';
+      }, 3000);
+      return;
+    }
+    clearTimeout(resetTimer);
+    state.resetArmed = false;
+    el.reset.textContent = 'تصفير';
+    state.cards = [];
+    render(false);
+    showToast('تم تصفير اليد');
+    buzz(20);
+  });
+
+  var sheet = document.getElementById('sheet');
+  document.getElementById('help').addEventListener('click', function(){ sheet.classList.add('on'); });
+  document.getElementById('sheetClose').addEventListener('click', function(){ sheet.classList.remove('on'); });
+  sheet.addEventListener('click', function(ev){ if (ev.target === sheet) sheet.classList.remove('on'); });
+
+  document.querySelectorAll('.suit').forEach(function(b){
+    b.classList.toggle('on', b.dataset.suit === state.suit);
+  });
+
+  load();
+  render(false);
+})();
+</script>
+</body>
+</html>
